@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0,
+    maximum-scale=1.0, user-scalable=no"
+>
+
+<title>Direct Live Scan</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #05070d;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+header {
+    padding: 14px;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+#cameraBox {
+    position: relative;
+    width: 100%;
+    max-width: 720px;
+    margin: auto;
+    background: black;
+    overflow: hidden;
+}
+
+video {
+    display: block;
+    width: 100%;
+    min-height: 55vh;
+    object-fit: cover;
+}
+
+#scanFrame {
+    position: absolute;
+    left: 6%;
+    top: 12%;
+    width: 88%;
+    height: 70%;
+    border: 3px solid white;
+    border-radius: 12px;
+    pointer-events: none;
+}
+
+#status {
+    margin: 15px;
+    padding: 15px;
+    border-radius: 12px;
+    background: #111722;
+    font-size: 18px;
+}
+
+button {
+    width: 88%;
+    max-width: 500px;
+    margin: 8px;
+    padding: 16px;
+    border: 0;
+    border-radius: 12px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#startButton {
+    background: white;
+    color: black;
+}
+
+#stopButton {
+    background: #242b38;
+    color: white;
+}
+
+canvas {
+    display: none;
+}
+</style>
+</head>
+
+<body>
+
+<header>📷 DIRECT LIVE SCAN</header>
+
+<div id="cameraBox">
+
+    <video
+        id="video"
+        autoplay
+        playsinline
+        muted>
+    </video>
+
+    <div id="scanFrame"></div>
+
+</div>
+
+<div id="status">
+    Press START LIVE SCAN
+</div>
+
+<button id="startButton">
+    ▶ START LIVE SCAN
+</button>
+
+<button id="stopButton">
+    ■ STOP SCAN
+</button>
+
+<canvas id="canvas"></canvas>
+
+<script>
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const statusBox = document.getElementById("status");
+
+const startButton =
+    document.getElementById("startButton");
+
+const stopButton =
+    document.getElementById("stopButton");
+
+let stream = null;
+let scanTimer = null;
+
+
+async function startCamera() {
+
+    try {
+
+        stream =
+            await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: {
+                        ideal: "environment"
+                    },
+                    width: {
+                        ideal: 1280
+                    },
+                    height: {
+                        ideal: 720
+                    }
+                },
+                audio: false
+            });
+
+        video.srcObject = stream;
+
+        statusBox.textContent =
+            "🟢 LIVE CAMERA READY";
+
+        startScanning();
+
+    } catch (error) {
+
+        console.error(error);
+
+        statusBox.textContent =
+            "Camera permission failed. Allow camera access.";
+    }
+}
+
+
+function startScanning() {
+
+    if (scanTimer) {
+        clearInterval(scanTimer);
+    }
+
+    scanTimer =
+        setInterval(captureFrame, 1000);
+}
+
+
+function captureFrame() {
+
+    if (!video.videoWidth || !video.videoHeight) {
+        return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx =
+        canvas.getContext(
+            "2d",
+            { willReadFrequently: true }
+        );
+
+    ctx.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    checkFrameQuality(ctx);
+}
+
+
+function checkFrameQuality(ctx) {
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    if (!width || !height) {
+        return;
+    }
+
+    const sampleWidth = Math.min(width, 320);
+    const sampleHeight = Math.min(height, 180);
+
+    const temp =
+        document.createElement("canvas");
+
+    temp.width = sampleWidth;
+    temp.height = sampleHeight;
+
+    const tempCtx =
+        temp.getContext(
+            "2d",
+            { willReadFrequently: true }
+        );
+
+    tempCtx.drawImage(
+        canvas,
+        0,
+        0,
+        sampleWidth,
+        sampleHeight
+    );
+
+    const image =
+        tempCtx.getImageData(
+            0,
+            0,
+            sampleWidth,
+            sampleHeight
+        );
+
+    const pixels = image.data;
+
+    let brightness = 0;
+
+    for (let i = 0; i < pixels.length; i += 4) {
+
+        brightness +=
+            (
+                pixels[i] +
+                pixels[i + 1] +
+                pixels[i + 2]
+            ) / 3;
+    }
+
+    brightness /= pixels.length / 4;
+
+    if (brightness < 25) {
+
+        statusBox.textContent =
+            "⚠️ TOO DARK — RESCAN";
+
+        return;
+    }
+
+    if (brightness > 235) {
+
+        statusBox.textContent =
+            "⚠️ TOO BRIGHT — RESCAN";
+
+        return;
+    }
+
+    statusBox.textContent =
+        "🔍 LIVE SCANNING — NO TRADE";
+}
+
+
+function stopCamera() {
+
+    if (scanTimer) {
+        clearInterval(scanTimer);
+        scanTimer = null;
+    }
+
+    if (stream) {
+
+        stream.getTracks().forEach(
+            track => track.stop()
+        );
+
+        stream = null;
+    }
+
+    video.srcObject = null;
+
+    statusBox.textContent =
+        "⚪ SCAN STOPPED";
+}
+
+
+startButton.addEventListener(
+    "click",
+    startCamera
+);
+
+stopButton.addEventListener(
+    "click",
+    stopCamera
+);
+
+window.addEventListener(
+    "beforeunload",
+    stopCamera
+);
+
+</script>
+
+</body>
+</html>
