@@ -13,7 +13,7 @@ from telegram.ext import CallbackQueryHandler
 from telegram.ext import ContextTypes
 
 
-TOKEN = "".join(os.getenv("BOT_TOKEN", "").split())
+TOKEN = os.getenv("BOT_TOKEN", "").strip()
 PORT = int(os.getenv("PORT", "10000"))
 
 PUBLIC_URL = os.getenv(
