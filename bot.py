@@ -10,7 +10,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-TOKEN = os.getenv("BOT_TOKEN", "").strip()
+TOKEN = "".join(os.getenv("BOT_TOKEN", "").split())
 
 # Country / timezone options
 TIMEZONES = {
