@@ -1,174 +1,241 @@
 import os
-import threading
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
-from telegram import Update
-from telegram import InlineKeyboardButton
-from telegram import InlineKeyboardMarkup
-from telegram import WebAppInfo
-
-from telegram.ext import Application
-from telegram.ext import CommandHandler
-from telegram.ext import CallbackQueryHandler
-from telegram.ext import ContextTypes
-
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+)
 
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
-PORT = int(os.getenv("PORT", "10000"))
 
-PUBLIC_URL = os.getenv(
-    "PUBLIC_URL",
-    os.getenv("RENDER_EXTERNAL_URL", "")
-).strip().rstrip("/")
+# Country / timezone options
+TIMEZONES = {
+    "india": ("🇮🇳 India", "Asia/Kolkata"),
+    "saudi": ("🇸🇦 Saudi Arabia", "Asia/Riyadh"),
+    "uae": ("🇦🇪 UAE", "Asia/Dubai"),
+    "qatar": ("🇶🇦 Qatar", "Asia/Qatar"),
+    "kuwait": ("🇰🇼 Kuwait", "Asia/Kuwait"),
+    "bahrain": ("🇧🇭 Bahrain", "Asia/Bahrain"),
+    "oman": ("🇴🇲 Oman", "Asia/Muscat"),
+    "pakistan": ("🇵🇰 Pakistan", "Asia/Karachi"),
+    "bangladesh": ("🇧🇩 Bangladesh", "Asia/Dhaka"),
+    "srilanka": ("🇱🇰 Sri Lanka", "Asia/Colombo"),
+    "malaysia": ("🇲🇾 Malaysia", "Asia/Kuala_Lumpur"),
+    "singapore": ("🇸🇬 Singapore", "Asia/Singapore"),
+    "indonesia": ("🇮🇩 Indonesia", "Asia/Jakarta"),
+    "uk": ("🇬🇧 United Kingdom", "Europe/London"),
+    "usa": ("🇺🇸 USA - New York", "America/New_York"),
+}
+
+# Olymp Trade OTC assets
+ASSETS = [
+    "NZD/USD OTC",
+    "AUD/CAD OTC",
+    "AUD/CHF OTC",
+    "AUD/JPY OTC",
+    "AUD/NZD OTC",
+    "CAD/CHF OTC",
+    "CAD/JPY OTC",
+    "CHF/JPY OTC",
+    "EUR/AUD OTC",
+    "EUR/CAD OTC",
+    "EUR/CHF OTC",
+    "EUR/GBP OTC",
+    "EUR/JPY OTC",
+    "EUR/NZD OTC",
+    "EUR/USD OTC",
+    "GBP/AUD OTC",
+    "GBP/CAD OTC",
+    "GBP/CHF OTC",
+    "GBP/JPY OTC",
+    "GBP/NZD OTC",
+    "GBP/USD OTC",
+    "NZD/CAD OTC",
+    "NZD/CHF OTC",
+    "NZD/JPY OTC",
+    "USD/CAD OTC",
+    "USD/CHF OTC",
+    "AUD/USD OTC",
+    "USD/JPY OTC",
+    "BNB OTC",
+    "Bitcoin OTC",
+    "Dogecoin OTC",
+    "Ethereum OTC",
+    "Litecoin OTC",
+    "PEPE OTC",
+    "Ripple OTC",
+    "Solana OTC",
+    "Gold OTC",
+    "Silver OTC",
+]
 
 
-if not TOKEN:
-    raise RuntimeError("BOT_TOKEN is missing")
+def country_keyboard():
+    rows = []
+    items = list(TIMEZONES.items())
 
-if not PUBLIC_URL:
-    raise RuntimeError("PUBLIC_URL is missing")
+    for i in range(0, len(items), 2):
+        row = []
 
-
-class WebHandler(SimpleHTTPRequestHandler):
-
-    def log_message(self, format, *args):
-        pass
-
-
-def run_web_server():
-
-    server = ThreadingHTTPServer(
-        ("0.0.0.0", PORT),
-        WebHandler
-    )
-
-    print("Web server running on port", PORT)
-
-    server.serve_forever()
-
-
-def home_keyboard():
-
-    buttons = [
-        [
+        key1, value1 = items[i]
+        row.append(
             InlineKeyboardButton(
-                "⚡ Advance Signal",
-                callback_data="advance"
+                value1[0],
+                callback_data=f"tz:{key1}"
             )
-        ],
-        [
-            InlineKeyboardButton(
-                "📷 Direct Live Scan",
-                web_app=WebAppInfo(
-                    url=PUBLIC_URL + "/camera.html"
+        )
+
+        if i + 1 < len(items):
+            key2, value2 = items[i + 1]
+            row.append(
+                InlineKeyboardButton(
+                    value2[0],
+                    callback_data=f"tz:{key2}"
                 )
             )
-        ]
-    ]
 
-    return InlineKeyboardMarkup(buttons)
+        rows.append(row)
+
+    return InlineKeyboardMarkup(rows)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    context.user_data["signal_set"] = 0
+    text = (
+        "🤖 OTC AI\n\n"
+        "📊 Olymp Trade OTC\n"
+        "⏱ 1 Minute Mode\n"
+        "🌍 UTC Auto Time Converter\n"
+        "🚫 No Martingale\n\n"
+        "👇 Select your country/timezone:"
+    )
 
     await update.message.reply_text(
-        "⚡ OLYMP TRADE SIGNAL\n\n"
-        "Select an option 👇",
-        reply_markup=home_keyboard()
+        text,
+        reply_markup=country_keyboard()
     )
 
 
-async def advance_signal(query, context):
-
-    set_number = context.user_data.get("signal_set", 0) + 1
-
-    context.user_data["signal_set"] = set_number
-
-    buttons = [
-        [
-            InlineKeyboardButton(
-                "🔄 Next Set",
-                callback_data="advance"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "⬅️ Home",
-                callback_data="home"
-            )
-        ]
-    ]
-
-    keyboard = InlineKeyboardMarkup(buttons)
-
-    message = (
-        "⚡ ADVANCE SIGNAL — SET "
-        + str(set_number)
-        + "\n\n"
-        + "Searching for valid setups...\n\n"
-        + "Maximum 10 signals per set.\n"
-        + "No random signals."
-    )
-
-    await query.edit_message_text(
-        message,
-        reply_markup=keyboard
-    )
-
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
+async def timezone_selected(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     query = update.callback_query
-
     await query.answer()
 
-    if query.data == "advance":
+    key = query.data.split(":", 1)[1]
 
-        await advance_signal(
-            query,
-            context
+    if key not in TIMEZONES:
+        await query.edit_message_text("❌ Invalid timezone.")
+        return
+
+    country_name, zone_name = TIMEZONES[key]
+
+    context.user_data["timezone"] = zone_name
+    context.user_data["country"] = country_name
+
+    now_utc = datetime.now(timezone.utc)
+    local_time = now_utc.astimezone(ZoneInfo(zone_name))
+
+    text = (
+        "✅ Timezone Selected\n\n"
+        f"{country_name}\n"
+        f"🌐 UTC: {now_utc.strftime('%H:%M:%S')}\n"
+        f"🕐 Local: {local_time.strftime('%H:%M:%S')}\n\n"
+        "OTC AI is ready."
+    )
+
+    await query.edit_message_text(text)
+
+
+async def time_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    zone_name = context.user_data.get("timezone")
+
+    if not zone_name:
+        await update.message.reply_text(
+            "🌍 First select your country:",
+            reply_markup=country_keyboard()
         )
+        return
 
-    elif query.data == "home":
+    country = context.user_data.get("country", "")
+    now_utc = datetime.now(timezone.utc)
+    local_time = now_utc.astimezone(ZoneInfo(zone_name))
 
-        await query.edit_message_text(
-            "⚡ OLYMP TRADE SIGNAL\n\n"
-            "Select an option 👇",
-            reply_markup=home_keyboard()
-        )
+    await update.message.reply_text(
+        f"🌐 UTC: {now_utc.strftime('%H:%M:%S')}\n"
+        f"{country}: {local_time.strftime('%H:%M:%S')}"
+    )
+
+
+async def assets_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    lines = ["📊 OTC AI ASSETS\n"]
+
+    for number, asset in enumerate(ASSETS, start=1):
+        lines.append(f"{number}. {asset}")
+
+    await update.message.reply_text("\n".join(lines))
+
+
+async def status(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    await update.message.reply_text(
+        "🟢 OTC AI ONLINE\n\n"
+        "⏱ Mode: 1 Minute\n"
+        "🌐 Master Time: UTC\n"
+        "🌍 Local Time: Automatic\n"
+        "🚫 Martingale: OFF"
+    )
+
+
+async def signal(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    await update.message.reply_text(
+        "🔎 OTC AI Signal Engine\n\n"
+        "⏳ Waiting for confirmed market data...\n\n"
+        "UP/DOWN will only be sent after the "
+        "market-data analysis engine is connected.\n"
+        "Random signals are disabled."
+    )
 
 
 def main():
-
-    web_thread = threading.Thread(
-        target=run_web_server,
-        daemon=True
-    )
-
-    web_thread.start()
+    if not TOKEN:
+        raise RuntimeError(
+            "BOT_TOKEN is missing. Add BOT_TOKEN "
+            "to your hosting environment variables."
+        )
 
     app = Application.builder().token(TOKEN).build()
 
-    app.add_handler(
-        CommandHandler(
-            "start",
-            start
-        )
-    )
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("time", time_command))
+    app.add_handler(CommandHandler("assets", assets_command))
+    app.add_handler(CommandHandler("signal", signal))
 
     app.add_handler(
         CallbackQueryHandler(
-            button_handler
+            timezone_selected,
+            pattern=r"^tz:"
         )
     )
 
-    print("Olymp Trade Signal Bot running...")
-
-    app.run_polling(
-        drop_pending_updates=True
-    )
+    print("OTC AI BOT STARTED")
+    app.run_polling()
 
 
 if __name__ == "__main__":
